@@ -262,7 +262,13 @@ class EnemyTrackingCore(
     private fun snapshots(nowMs: Long): List<TrackedEnemy> = tracks.asSequence()
         .filter { track ->
             val age = (nowMs - track.lastSeenMs).coerceAtLeast(0L)
-            val sufficientlyConfirmed = track.observations >= 2 || track.quality >= 0.86f
+            // A single high-quality OCR observation may be shown briefly during occlusion.
+            // Do not base this decision only on decaying quality: that made a strong first
+            // detection disappear immediately on the first empty frame. Keep the stricter
+            // confidence floor and short prediction TTL to avoid long-lived false positives.
+            val sufficientlyConfirmed = track.observations >= 2 ||
+                track.quality >= 0.86f ||
+                (track.observations == 1 && age <= predictionHoldMs && track.confidence >= 0.40f)
             sufficientlyConfirmed && age <= predictionHoldMs && track.confidence >= 0.28f
         }
         .sortedByDescending { it.confidence }
